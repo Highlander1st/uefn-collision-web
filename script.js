@@ -9,30 +9,49 @@ document.getElementById('convertButton').addEventListener('click', () => {
   reader.onload = function(event) {
     try {
       const json = JSON.parse(event.target.result);
-      const convexElems = json[0].Properties.AggGeom.ConvexElems;
 
-      let output = "(SphereElems=,BoxElems=,SphylElems=,ConvexElems=(\n";
+      let convexOutput = "";
+      let boxOutput = "";
 
-      convexElems.forEach(elem => {
-        const vertices = elem.VertexData.map(v =>
-          `(X=${v.X},Y=${v.Y},Z=${v.Z})`
-        ).join(",");
+      json.forEach(entry => {
+        if (!entry.Properties || !entry.Properties.AggGeom) return;
+        const geom = entry.Properties.AggGeom;
 
-        const indices = elem.IndexData.join(",");
+        // ✅ ConvexElems
+        if (geom.ConvexElems) {
+          const convexList = geom.ConvexElems.map(elem => {
+            const vertices = elem.VertexData.map(v =>
+              `(X=${v.X},Y=${v.Y},Z=${v.Z})`
+            ).join(",");
+            const indices = elem.IndexData.join(",");
+            const min = elem.ElemBox.Min;
+            const max = elem.ElemBox.Max;
+            const elemBox = `ElemBox=(Min=(X=${min.X},Y=${min.Y},Z=${min.Z}),Max=(X=${max.X},Y=${max.Y},Z=${max.Z}),IsValid=True)`;
+            return `(VertexData=(${vertices}),IndexData=(${indices}),${elemBox})`;
+          });
+          if (convexList.length > 0) {
+            convexOutput = `ConvexElems=(${convexList.join(",")})`;
+          }
+        }
 
-        const min = elem.ElemBox.Min;
-        const max = elem.ElemBox.Max;
-
-        const elemBox = `ElemBox=(Min=(X=${min.X},Y=${min.Y},Z=${min.Z}),Max=(X=${max.X},Y=${max.Y},Z=${max.Z}),IsValid=True)`;
-
-        output += `(${`VertexData=(${vertices}),IndexData=(${indices}),${elemBox}`}),\n`;
+        // ✅ BoxElems
+        if (geom.BoxElems) {
+          const boxList = geom.BoxElems.map(elem => {
+            const c = elem.Center;
+            const r = elem.Rotation;
+            return `(Center=(X=${c.X},Y=${c.Y},Z=${c.Z}),Rotation=(Pitch=${r.Pitch},Yaw=${r.Yaw},Roll=${r.Roll}),X=${elem.X},Y=${elem.Y},Z=${elem.Z})`;
+          });
+          if (boxList.length > 0) {
+            boxOutput = `BoxElems=(${boxList.join(",")})`;
+          }
+        }
       });
 
-      output += "))";
-
-      document.getElementById("outputBox").value = output;
+      // Final Output Assembly
+      const finalOutput = `(${boxOutput || "BoxElems="},${convexOutput || "ConvexElems="})`;
+      document.getElementById("outputBox").value = finalOutput;
     } catch (e) {
-      alert("Error processing file. Make sure it's a valid FModel-exported JSON.");
+      alert("Error processing file. Make sure it's a valid JSON from FModel.");
     }
   };
 
@@ -45,4 +64,3 @@ document.getElementById('copyButton').addEventListener('click', () => {
     navigator.clipboard.writeText(output);
   }
 });
-
